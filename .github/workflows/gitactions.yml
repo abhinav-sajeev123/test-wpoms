@@ -29,30 +29,56 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
+      - name: Generate Image Tag
+        run: |
+          echo "IMAGE_TAG=${GITHUB_SHA::7}-$(TZ=Asia/Kolkata date +'%Y%m%d-%H%M%S')" >> $GITHUB_ENV
+
+      - name: Print Image Tag
+        run: |
+          echo "Image Tag: $IMAGE_TAG"    
+
       - name: Build Frontend Image
         run: |
-          docker build -t $FRONTEND_REPO:${{ github.sha }} ./wpoms_web
+          docker build -t $FRONTEND_REPO:$IMAGE_TAG ./wpoms_web
+
+      - name: Scan Frontend Image
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+         image-ref: ${{ env.FRONTEND_REPO }}:${{ env.IMAGE_TAG }}
+         format: table
+         severity: CRITICAL,HIGH
+         exit-code: '1'
+         ignore-unfixed: true    
 
       - name: Build Backend Image
         run: |
-          docker build -t $BACKEND_REPO:${{ github.sha }} ./wpoms_admin
+          docker build -t $BACKEND_REPO:$IMAGE_TAG ./wpoms_admin
+
+      - name: Scan Backend Image
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+         image-ref: ${{ env.BACKEND_REPO }}:${{ env.IMAGE_TAG }}
+         format: table
+         severity: CRITICAL,HIGH
+         exit-code: '1'
+         ignore-unfixed: true    
 
       - name: Tag Frontend Image
         run: |
-          docker tag $FRONTEND_REPO:${{ github.sha }} \
-          ${{ steps.login-ecr.outputs.registry }}/$FRONTEND_REPO:${{ github.sha }}
+          docker tag $FRONTEND_REPO:$IMAGE_TAG \
+          ${{ steps.login-ecr.outputs.registry }}/$FRONTEND_REPO:$IMAGE_TAG
 
       - name: Tag Backend Image
         run: |
-          docker tag $BACKEND_REPO:${{ github.sha }} \
-          ${{ steps.login-ecr.outputs.registry }}/$BACKEND_REPO:${{ github.sha }}
+          docker tag $BACKEND_REPO:$IMAGE_TAG \
+          ${{ steps.login-ecr.outputs.registry }}/$BACKEND_REPO:$IMAGE_TAG
 
       - name: Push Frontend Image
         run: |
           docker push \
-          ${{ steps.login-ecr.outputs.registry }}/$FRONTEND_REPO:${{ github.sha }}
+          ${{ steps.login-ecr.outputs.registry }}/$FRONTEND_REPO:$IMAGE_TAG
 
       - name: Push Backend Image
         run: |
           docker push \
-          ${{ steps.login-ecr.outputs.registry }}/$BACKEND_REPO:${{ github.sha }}
+          ${{ steps.login-ecr.outputs.registry }}/$BACKEND_REPO:$IMAGE_TAG
