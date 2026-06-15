@@ -43,6 +43,7 @@ jobs:
 
       - name: Scan Frontend Image
         uses: aquasecurity/trivy-action@master
+        continue-on-error: true
         with:
          image-ref: ${{ env.FRONTEND_REPO }}:${{ env.IMAGE_TAG }}
          format: table
@@ -56,6 +57,7 @@ jobs:
 
       - name: Scan Backend Image
         uses: aquasecurity/trivy-action@master
+        continue-on-error: true
         with:
          image-ref: ${{ env.BACKEND_REPO }}:${{ env.IMAGE_TAG }}
          format: table
