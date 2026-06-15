@@ -42,7 +42,7 @@ jobs:
           docker build -t $FRONTEND_REPO:$IMAGE_TAG ./wpoms_web
 
       - name: Scan Frontend Image
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action
         with:
          image-ref: ${{ env.FRONTEND_REPO }}:${{ env.IMAGE_TAG }}
          format: table
@@ -55,7 +55,7 @@ jobs:
           docker build -t $BACKEND_REPO:$IMAGE_TAG ./wpoms_admin
 
       - name: Scan Backend Image
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action
         with:
          image-ref: ${{ env.BACKEND_REPO }}:${{ env.IMAGE_TAG }}
          format: table
