@@ -68,9 +68,6 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
 
-    env:
-      ECR_REGISTRY: ${{ needs.build.outputs.registry }}
-
     steps:
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v1.0.3
@@ -87,7 +84,7 @@ jobs:
 
             export AWS_REGION=${{ secrets.AWS_REGION }}
             export S3_BUCKET=wpoms-abhinav-deploy-files
-            export ECR_REGISTRY=${ECR_REGISTRY}
+            export ECR_REGISTRY=${{ needs.build.outputs.registry }}
             export FRONTEND_REPO=wpoms-abhinav-frontend
             export BACKEND_REPO=wpoms-abhinav-backend
             export IMAGE_TAG=${{ needs.build.outputs.image_tag }}
