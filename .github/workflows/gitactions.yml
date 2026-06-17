@@ -83,7 +83,9 @@ jobs:
 
             export AWS_REGION=${{ secrets.AWS_REGION }}
             export IMAGE_TAG=${{ needs.build.outputs.image_tag }}
-            export ECR_REGISTRY=${{ needs.build.outputs.registry }}
+            
+            ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+            export ECR_REGISTRY="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
 
             export FRONTEND_REPOSITORY=wpoms-abhinav-frontend
             export BACKEND_REPOSITORY=wpoms-abhinav-backend
