@@ -1,13 +1,8 @@
 import axios from 'axios';
 
-// In development, use relative paths to trigger the Vite proxy and bypass CORS.
-// In production, use the actual backend URL.
-if (!import.meta.env.VITE_API_BASE_URL) {
-  throw new Error("Please set the VITE_API_BASE_URL environment variable")
-}
-
-
-const API_URL = import.meta.env.VITE_API_BASE_URL;
+// In development, use VITE_API_BASE_URL if set.
+// In production/deployment, dynamically fall back to the same hostname on port 8081.
+const API_URL = import.meta.env.VITE_API_BASE_URL || `http://${window.location.hostname}:8081`;
 
 const apiClient = axios.create({
   baseURL: API_URL,
