@@ -1,35 +1,33 @@
 version: "3.8"
 
 services:
-
   frontend:
-    build:
-      context: ./wpoms_web
+    image: ${ECR_REGISTRY}/${FRONTEND_REPOSITORY}:${IMAGE_TAG}
     ports:
       - "5173:5173"
     depends_on:
       - backend
 
   backend:
-    build:
-      context: ./wpoms_admin
+    image: ${ECR_REGISTRY}/${BACKEND_REPOSITORY}:${IMAGE_TAG}
     ports:
       - "8081:8081"
-    environment:
-      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL}
-      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
-      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
     depends_on:
       - db
-
+    environment:
+      SPRING_DATASOURCE_URL:  jdbc:postgresql://db:5432/${POSTGRES_DB}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD:  ${POSTGRES_PASSWORD}
+      
   db:
     image: postgres:16
-    ports:
-      - "5432:5432"
+    restart: always
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
 

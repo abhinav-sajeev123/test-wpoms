@@ -24,6 +24,8 @@ resource "aws_instance" "server" {
 
   user_data = file("${path.module}/user_data.sh")
 
+  iam_instance_profile = aws_iam_instance_profile.ec2_profile.name
+
   tags = {
     Name = "terraform-ec2"
   }

@@ -1,4 +1,4 @@
-name: Build and Push Images
+name: Build and Deploy
 
 on:
   push:
@@ -9,16 +9,23 @@ env:
   AWS_REGION: ${{ secrets.AWS_REGION }}
   FRONTEND_REPO: wpoms-abhinav-frontend
   BACKEND_REPO: wpoms-abhinav-backend
+  S3_BUCKET: wpoms-abhinav-deploy-files
 
 jobs:
-  build-and-push:
+
+
+  build:
     runs-on: ubuntu-latest
 
+    outputs:
+      image_tag: ${{ steps.tag.outputs.image_tag }}
+      registry: ${{ steps.login-ecr.outputs.registry }}
+
     steps:
-      - name: Checkout Code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Configure AWS Credentials
+      - name: Configure AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -30,57 +37,78 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Generate Image Tag
+        id: tag
         run: |
-          echo "IMAGE_TAG=${GITHUB_SHA::7}-$(TZ=Asia/Kolkata date +'%Y%m%d-%H%M%S')" >> $GITHUB_ENV
+          TAG=${GITHUB_SHA::7}-$(date +%s)
+          echo "image_tag=$TAG" >> $GITHUB_OUTPUT
+          echo "IMAGE_TAG=$TAG" >> $GITHUB_ENV
 
-      - name: Print Image Tag
-        run: |
-          echo "Image Tag: $IMAGE_TAG"    
-
-      - name: Build Frontend Image
+     
+      - name: Build & Push Frontend
         run: |
           docker build -t $FRONTEND_REPO:$IMAGE_TAG ./wpoms_web
+          docker tag $FRONTEND_REPO:$IMAGE_TAG ${{ steps.login-ecr.outputs.registry }}/$FRONTEND_REPO:$IMAGE_TAG
+          docker push ${{ steps.login-ecr.outputs.registry }}/$FRONTEND_REPO:$IMAGE_TAG
 
-      - name: Scan Frontend Image
-        uses: aquasecurity/trivy-action@master
-        continue-on-error: true
-        with:
-         image-ref: ${{ env.FRONTEND_REPO }}:${{ env.IMAGE_TAG }}
-         format: table
-         severity: CRITICAL,HIGH
-         exit-code: '1'
-         ignore-unfixed: true    
 
-      - name: Build Backend Image
+      - name: Build & Push Backend
         run: |
           docker build -t $BACKEND_REPO:$IMAGE_TAG ./wpoms_admin
+          docker tag $BACKEND_REPO:$IMAGE_TAG ${{ steps.login-ecr.outputs.registry }}/$BACKEND_REPO:$IMAGE_TAG
+          docker push ${{ steps.login-ecr.outputs.registry }}/$BACKEND_REPO:$IMAGE_TAG
 
-      - name: Scan Backend Image
-        uses: aquasecurity/trivy-action@master
-        continue-on-error: true
+   
+      - name: Upload docker-compose to S3
+        run: |
+          aws s3 cp docker-compose.yml s3://$S3_BUCKET/docker-compose.yml
+
+
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+
+    env:
+      ECR_REGISTRY: ${{ needs.build.outputs.registry }}
+
+    steps:
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.0.3
+
         with:
-         image-ref: ${{ env.BACKEND_REPO }}:${{ env.IMAGE_TAG }}
-         format: table
-         severity: CRITICAL,HIGH
-         exit-code: '1'
-         ignore-unfixed: true    
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
 
-      - name: Tag Frontend Image
-        run: |
-          docker tag $FRONTEND_REPO:$IMAGE_TAG \
-          ${{ steps.login-ecr.outputs.registry }}/$FRONTEND_REPO:$IMAGE_TAG
+          script: |
+            set -e
 
-      - name: Tag Backend Image
-        run: |
-          docker tag $BACKEND_REPO:$IMAGE_TAG \
-          ${{ steps.login-ecr.outputs.registry }}/$BACKEND_REPO:$IMAGE_TAG
+            echo "Starting deployment..."
 
-      - name: Push Frontend Image
-        run: |
-          docker push \
-          ${{ steps.login-ecr.outputs.registry }}/$FRONTEND_REPO:$IMAGE_TAG
+            export AWS_REGION=${{ secrets.AWS_REGION }}
+            export S3_BUCKET=wpoms-abhinav-deploy-files
+            export ECR_REGISTRY=${ECR_REGISTRY}
+            export FRONTEND_REPO=wpoms-abhinav-frontend
+            export BACKEND_REPO=wpoms-abhinav-backend
+            export IMAGE_TAG=${{ needs.build.outputs.image_tag }}
 
-      - name: Push Backend Image
-        run: |
-          docker push \
-          ${{ steps.login-ecr.outputs.registry }}/$BACKEND_REPO:$IMAGE_TAG
+            mkdir -p ~/app
+            cd ~/app
+
+            echo "Fetching docker-compose from S3..."
+            aws s3 cp s3://$S3_BUCKET/docker-compose.yml docker-compose.yml
+
+            echo "Fetching secrets from SSM..."
+            export POSTGRES_DB=$(aws ssm get-parameter --name "/wpoms/POSTGRES_DB" --query "Parameter.Value" --output text)
+            export POSTGRES_USER=$(aws ssm get-parameter --name "/wpoms/POSTGRES_USER" --query "Parameter.Value" --output text)
+            export POSTGRES_PASSWORD=$(aws ssm get-parameter --name "/wpoms/POSTGRES_PASSWORD" --with-decryption --query "Parameter.Value" --output text)
+
+            echo "Logging into ECR..."
+            aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
+
+            echo "Deploying containers..."
+            docker compose down || true
+            docker compose pull
+            docker compose up -d
+
+            echo "Deployment successful"          

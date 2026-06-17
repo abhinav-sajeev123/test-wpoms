@@ -13,3 +13,7 @@ output "public_ip" {
 output "public_dns" {
   value = aws_instance.server.public_dns
 }
+
+output "deploy_bucket_name" {
+  value = aws_s3_bucket.deploy_files.bucket
+}
