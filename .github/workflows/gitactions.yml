@@ -1,121 +1,125 @@
-build:
-  runs-on: ubuntu-latest
+name: Build and Deploy
 
-  env:
-    FRONTEND_REPOSITORY: wpoms-abhinav-frontend
-    BACKEND_REPOSITORY: wpoms-abhinav-backend
-    S3_BUCKET: wpoms-abhinav-deploy-files
+on:
+  push:
+    branches:
+      - main
 
-  outputs:
-    image_tag: ${{ steps.tag.outputs.image_tag }}
-    registry: ${{ steps.registry.outputs.registry }}
+env:
+  FRONTEND_REPOSITORY: wpoms-abhinav-frontend
+  BACKEND_REPOSITORY: wpoms-abhinav-backend
+  S3_BUCKET: wpoms-abhinav-deploy-files
 
-  steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+jobs:
 
-    - name: Configure AWS
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ secrets.AWS_REGION }}
+  build:
+    runs-on: ubuntu-latest
 
-    - name: Set Registry
-      id: registry
-      run: |
-        ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-        echo "registry=$ACCOUNT_ID.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com" >> $GITHUB_OUTPUT
+    outputs:
+      image_tag: ${{ steps.tag.outputs.image_tag }}
+      registry: ${{ steps.registry.outputs.registry }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Set Registry
+        id: registry
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "registry=$ACCOUNT_ID.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com" >> $GITHUB_OUTPUT
+
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Generate Tag
+        id: tag
+        run: |
+          TAG=${GITHUB_SHA::7}-$(date +%s)
+          echo "image_tag=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Build & Push Frontend
+        run: |
+          IMAGE_TAG=${{ steps.tag.outputs.image_tag }}
+          REGISTRY=${{ steps.registry.outputs.registry }}
+
+          docker build -t $FRONTEND_REPOSITORY:$IMAGE_TAG ./wpoms_web
+          docker tag $FRONTEND_REPOSITORY:$IMAGE_TAG $REGISTRY/$FRONTEND_REPOSITORY:$IMAGE_TAG
+          docker push $REGISTRY/$FRONTEND_REPOSITORY:$IMAGE_TAG
+
+      - name: Build & Push Backend
+        run: |
+          IMAGE_TAG=${{ steps.tag.outputs.image_tag }}
+          REGISTRY=${{ steps.registry.outputs.registry }}
+
+          docker build -t $BACKEND_REPOSITORY:$IMAGE_TAG ./wpoms_admin
+          docker tag $BACKEND_REPOSITORY:$IMAGE_TAG $REGISTRY/$BACKEND_REPOSITORY:$IMAGE_TAG
+          docker push $REGISTRY/$BACKEND_REPOSITORY:$IMAGE_TAG
+
+      - name: Upload docker-compose to S3
+        run: |
+          aws s3 cp docker-compose.yml s3://$S3_BUCKET/docker-compose.yml
 
 
-    - name: Login to ECR
-      uses: aws-actions/amazon-ecr-login@v2
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
 
-    - name: Generate Tag
-      id: tag
-      run: |
-        TAG=${GITHUB_SHA::7}-$(date +%s)
-        echo "image_tag=$TAG" >> $GITHUB_OUTPUT
+    steps:
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.0.3
 
-    - name: Build & Push Frontend
-      run: |
-        docker build -t $FRONTEND_REPOSITORY:${{ steps.tag.outputs.image_tag }} ./wpoms_web
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
 
-        docker tag $FRONTEND_REPOSITORY:${{ steps.tag.outputs.image_tag }} \
-        ${{ steps.registry.outputs.registry }}/$FRONTEND_REPOSITORY:${{ steps.tag.outputs.image_tag }}
+          script: |
+            set -e
 
-        docker push ${{ steps.registry.outputs.registry }}/$FRONTEND_REPOSITORY:${{ steps.tag.outputs.image_tag }}
+            echo "Starting deployment..."
 
-    - name: Build & Push Backend
-      run: |
-        docker build -t $BACKEND_REPOSITORY:${{ steps.tag.outputs.image_tag }} ./wpoms_admin
+            export AWS_REGION=${{ secrets.AWS_REGION }}
+            export IMAGE_TAG=${{ needs.build.outputs.image_tag }}
+            export ECR_REGISTRY=${{ needs.build.outputs.registry }}
 
-        docker tag $BACKEND_REPOSITORY:${{ steps.tag.outputs.image_tag }} \
-        ${{ steps.registry.outputs.registry }}/$BACKEND_REPOSITORY:${{ steps.tag.outputs.image_tag }}
+            export FRONTEND_REPOSITORY=wpoms-abhinav-frontend
+            export BACKEND_REPOSITORY=wpoms-abhinav-backend
+            export S3_BUCKET=wpoms-abhinav-deploy-files
 
-        docker push ${{ steps.registry.outputs.registry }}/$BACKEND_REPOSITORY:${{ steps.tag.outputs.image_tag }}
+            mkdir -p ~/app
+            cd ~/app
 
-    - name: Upload docker-compose to S3
-      run: |
-        aws s3 cp docker-compose.yml s3://$S3_BUCKET/docker-compose.yml
+            aws s3 cp s3://$S3_BUCKET/docker-compose.yml docker-compose.yml
 
-deploy:
-  needs: build
-  runs-on: ubuntu-latest
+            export POSTGRES_DB=$(aws ssm get-parameter \
+              --name "/wpoms/POSTGRES_DB" \
+              --query "Parameter.Value" \
+              --output text)
 
-  steps:
-    - name: Deploy to EC2
-      uses: appleboy/ssh-action@v1.0.3
+            export POSTGRES_USER=$(aws ssm get-parameter \
+              --name "/wpoms/POSTGRES_USER" \
+              --query "Parameter.Value" \
+              --output text)
 
-      with:
-        host: ${{ secrets.EC2_HOST }}
-        username: ${{ secrets.EC2_USER }}
-        key: ${{ secrets.EC2_SSH_KEY }}
+            export POSTGRES_PASSWORD=$(aws ssm get-parameter \
+              --name "/wpoms/POSTGRES_PASSWORD" \
+              --with-decryption \
+              --query "Parameter.Value" \
+              --output text)
 
-        script: |
-          set -e
+            aws ecr get-login-password --region $AWS_REGION | \
+              docker login --username AWS --password-stdin $ECR_REGISTRY
 
-          echo "Starting deployment..."
+            docker compose down || true
+            docker compose pull
+            docker compose up -d
 
-         
-          export AWS_REGION=${{ secrets.AWS_REGION }}
-          export IMAGE_TAG=${{ needs.build.outputs.image_tag }}
-          export ECR_REGISTRY=${{ needs.build.outputs.registry }}
-
-          export FRONTEND_REPOSITORY=wpoms-abhinav-frontend
-          export BACKEND_REPOSITORY=wpoms-abhinav-backend
-          export S3_BUCKET=wpoms-abhinav-deploy-files
-
-          mkdir -p ~/app
-          cd ~/app
-
-        
-          aws s3 cp s3://$S3_BUCKET/docker-compose.yml docker-compose.yml
-
-         
-          export POSTGRES_DB=$(aws ssm get-parameter \
-            --name "/wpoms/POSTGRES_DB" \
-            --query "Parameter.Value" \
-            --output text)
-
-          export POSTGRES_USER=$(aws ssm get-parameter \
-            --name "/wpoms/POSTGRES_USER" \
-            --query "Parameter.Value" \
-            --output text)
-
-          export POSTGRES_PASSWORD=$(aws ssm get-parameter \
-            --name "/wpoms/POSTGRES_PASSWORD" \
-            --with-decryption \
-            --query "Parameter.Value" \
-            --output text)
-
-        
-          aws ecr get-login-password --region $AWS_REGION | \
-          docker login --username AWS --password-stdin $ECR_REGISTRY
-
-        
-          docker compose down || true
-          docker compose pull
-          docker compose up -d
-
-          echo "Deployment successful"        
+            echo "Deployment successful"
