@@ -17,7 +17,7 @@ jobs:
 
     outputs:
       image_tag: ${{ steps.tag.outputs.image_tag }}
-      registry: ${{ steps.registry.outputs.registry }}
+      registry: ${{ steps.login-ecr.outputs.registry }}
 
     steps:
       - name: Checkout code
@@ -30,13 +30,8 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Set Registry
-        id: registry
-        run: |
-          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-          echo "registry=$ACCOUNT_ID.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com" >> $GITHUB_OUTPUT
-
       - name: Login to ECR
+        id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Generate Tag
@@ -48,7 +43,7 @@ jobs:
       - name: Build & Push Frontend
         run: |
           IMAGE_TAG=${{ steps.tag.outputs.image_tag }}
-          REGISTRY=${{ steps.registry.outputs.registry }}
+          REGISTRY=${{ steps.login-ecr.outputs.registry }}
 
           docker build -t $FRONTEND_REPOSITORY:$IMAGE_TAG ./wpoms_web
           docker tag $FRONTEND_REPOSITORY:$IMAGE_TAG $REGISTRY/$FRONTEND_REPOSITORY:$IMAGE_TAG
@@ -57,7 +52,7 @@ jobs:
       - name: Build & Push Backend
         run: |
           IMAGE_TAG=${{ steps.tag.outputs.image_tag }}
-          REGISTRY=${{ steps.registry.outputs.registry }}
+          REGISTRY=${{ steps.login-ecr.outputs.registry }}
 
           docker build -t $BACKEND_REPOSITORY:$IMAGE_TAG ./wpoms_admin
           docker tag $BACKEND_REPOSITORY:$IMAGE_TAG $REGISTRY/$BACKEND_REPOSITORY:$IMAGE_TAG
