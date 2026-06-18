@@ -86,7 +86,8 @@ jobs:
 
             export AWS_REGION=${{ secrets.AWS_REGION }}
             export IMAGE_TAG=${{ needs.build.outputs.image_tag }}
-
+            export S3_BUCKET=${{ env.S3_BUCKET }}
+            
             mkdir -p ~/app
             cd ~/app
 
