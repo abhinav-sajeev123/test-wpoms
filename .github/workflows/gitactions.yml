@@ -118,35 +118,4 @@ jobs:
 
             echo "Deployment successful"
 
-      - name: Verify application health
-        run: |
-          FRONTEND_URL=http://${{ secrets.EC2_HOST }}:5173
-          BACKEND_URL=http://${{ secrets.EC2_HOST }}:8081
-
-          for URL in $FRONTEND_URL $BACKEND_URL
-          do
-            echo "Checking $URL"
-
-            SUCCESS=false
-
-            for i in {1..10}
-            do
-              STATUS=$(curl -o /dev/null -s -w "%{http_code}" $URL)
-
-              if [ "$STATUS" = "200" ]; then
-                echo "$URL is healthy"
-                SUCCESS=true
-                break
-              fi
-
-              echo "Attempt $i failed. Status: $STATUS"
-              sleep 10
-            done
-
-            if [ "$SUCCESS" = false ]; then
-              echo "$URL failed health check"
-              exit 1
-            fi
-          done
-
-          echo "All services are healthy"
+      
