@@ -3,13 +3,6 @@ set -e
 
 echo "Running deployment script..."
 
-ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-ECR_REGISTRY="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
-
-FRONTEND_REPOSITORY=wpoms-abhinav-frontend
-BACKEND_REPOSITORY=wpoms-abhinav-backend
-S3_BUCKET=wpoms-abhinav-deploy-files
-
 echo "Downloading docker-compose..."
 aws s3 cp s3://$S3_BUCKET/docker-compose.yml docker-compose.yml
 
