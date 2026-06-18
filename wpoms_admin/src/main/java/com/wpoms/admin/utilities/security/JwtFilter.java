@@ -89,6 +89,7 @@ public class JwtFilter extends OncePerRequestFilter {
                 path.startsWith("/swagger-resources") ||
                 path.equals("/api/products/warranty-types") ||
                 path.equals("/api/products/categories") ||
-                path.startsWith("/webjars");
+                path.startsWith("/webjars") ||
+                path.startsWith("/actuator");
     }
 }
