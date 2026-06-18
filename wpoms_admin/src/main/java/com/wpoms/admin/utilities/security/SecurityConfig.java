@@ -43,7 +43,8 @@ public class SecurityConfig {
                                                                 "/api/vendor/register",
                                                                 "/api/admin/register-manufacturer",
                                                                 "/api/products/warranty-types",
-                                                                "/api/products/categories")
+                                                                "/api/products/categories",
+                                                                "/actuator/health")
                                                 .permitAll()
 
                                                 // ========== SWAGGER UI ENDPOINTS ==========

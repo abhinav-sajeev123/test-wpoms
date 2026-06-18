@@ -116,6 +116,10 @@ jobs:
             docker compose pull
             docker compose up -d
 
-            echo "Deployment successful"
+            echo "Verifying services are healthy..."
+            [ "$(curl -s -o /dev/null -w "%{http_code}" --retry 15 --retry-connrefused --retry-delay 2 http://localhost:5173)" = "200" ]
+            [ "$(curl -s -o /dev/null -w "%{http_code}" --retry 15 --retry-connrefused --retry-delay 2 http://localhost:8081/actuator/health)" = "200" ]
+
+            echo "Deployment successful and verified"
 
       
