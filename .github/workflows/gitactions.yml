@@ -61,10 +61,6 @@ jobs:
         run: |
           aws s3 cp docker-compose.yml s3://$S3_BUCKET/docker-compose.yml
 
-      - name: Upload deploy script to S3   
-        run: |
-          aws s3 cp deploy.sh s3://$S3_BUCKET/deploy.sh    
-
 
   deploy:
     needs: build
@@ -85,21 +81,24 @@ jobs:
             echo "Starting deployment..."
 
             export AWS_REGION=${{ secrets.AWS_REGION }}
+            export IMAGE_TAG=${{ needs.build.outputs.image_tag }}
+            
             ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
             export ECR_REGISTRY="$ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
-            export IMAGE_TAG=${{ needs.build.outputs.image_tag }}
-            export S3_BUCKET=${{ env.S3_BUCKET }}
+
             export FRONTEND_REPOSITORY=wpoms-abhinav-frontend
             export BACKEND_REPOSITORY=wpoms-abhinav-backend
-           
+            export S3_BUCKET=wpoms-abhinav-deploy-files
 
             mkdir -p ~/app
             cd ~/app
 
+            aws s3 cp s3://$S3_BUCKET/docker-compose.yml docker-compose.yml
+
             export POSTGRES_DB=$(aws ssm get-parameter \
-            --name "/wpoms/POSTGRES_DB" \
-            --query "Parameter.Value" \
-            --output text)
+              --name "/wpoms/POSTGRES_DB" \
+              --query "Parameter.Value" \
+              --output text)
 
             export POSTGRES_USER=$(aws ssm get-parameter \
               --name "/wpoms/POSTGRES_USER" \
@@ -112,20 +111,11 @@ jobs:
               --query "Parameter.Value" \
               --output text)
 
+            aws ecr get-login-password --region $AWS_REGION | \
+              docker login --username AWS --password-stdin $ECR_REGISTRY
 
-            aws s3 cp s3://$S3_BUCKET/deploy.sh deploy.sh
+            docker compose down || true
+            docker compose pull
+            docker compose up -d
 
-            chmod +x deploy.sh
-            ECR_REGISTRY=$ECR_REGISTRY \
-            AWS_REGION=$AWS_REGION \
-            IMAGE_TAG=$IMAGE_TAG \
-            S3_BUCKET=$S3_BUCKET \
-            FRONTEND_REPOSITORY=$FRONTEND_REPOSITORY \
-            BACKEND_REPOSITORY=$BACKEND_REPOSITORY \
-            POSTGRES_DB=$POSTGRES_DB \
-            POSTGRES_USER=$POSTGRES_USER \
-            POSTGRES_PASSWORD=$POSTGRES_PASSWORD\
-            ./deploy.sh
-
-              
-        
+            echo "Deployment successful"
