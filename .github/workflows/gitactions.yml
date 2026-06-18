@@ -117,39 +117,15 @@ jobs:
             docker compose up -d
 
             echo "Verifying services are healthy..."
-            FRONTEND_OK=false
             for i in {1..30}; do
-              FRONTEND_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:5173 || echo "000")
-              echo "Frontend status: $FRONTEND_STATUS (attempt $i/30)"
-              if [ "$FRONTEND_STATUS" = "200" ]; then
-                FRONTEND_OK=true
-                break
+              if [ "$(curl -s -o /dev/null -w "%{http_code}" http://localhost:5173)" = "200" ] && \
+                 [ "$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8081/actuator/health)" = "200" ]; then
+                echo "Deployment successful and verified"
+                exit 0
               fi
               sleep 2
             done
-
-            BACKEND_OK=false
-            for i in {1..30}; do
-              BACKEND_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8081/actuator/health || echo "000")
-              echo "Backend status: $BACKEND_STATUS (attempt $i/30)"
-              if [ "$BACKEND_STATUS" = "200" ]; then
-                BACKEND_OK=true
-                break
-              fi
-              sleep 2
-            done
-
-            if [ "$FRONTEND_OK" = "false" ] || [ "$BACKEND_OK" = "false" ]; then
-              echo "Error: Service health check failed."
-              echo "=== Frontend Logs ==="
-              docker compose logs frontend | tail -n 50
-              echo "=== Backend Logs ==="
-              docker compose logs backend | tail -n 50
-              echo "=== DB Logs ==="
-              docker compose logs db | tail -n 50
-              exit 1
-            fi
-
-            echo "Deployment successful and verified"
+            echo "Error: Health check failed (services did not return 200 OK)"
+            exit 1
 
       
