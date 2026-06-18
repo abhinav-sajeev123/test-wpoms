@@ -96,6 +96,23 @@ jobs:
             mkdir -p ~/app
             cd ~/app
 
+            export POSTGRES_DB=$(aws ssm get-parameter \
+            --name "/wpoms/POSTGRES_DB" \
+            --query "Parameter.Value" \
+            --output text)
+
+            export POSTGRES_USER=$(aws ssm get-parameter \
+              --name "/wpoms/POSTGRES_USER" \
+              --query "Parameter.Value" \
+              --output text)
+
+            export POSTGRES_PASSWORD=$(aws ssm get-parameter \
+              --name "/wpoms/POSTGRES_PASSWORD" \
+              --with-decryption \
+              --query "Parameter.Value" \
+              --output text)
+
+
             aws s3 cp s3://$S3_BUCKET/deploy.sh deploy.sh
 
             chmod +x deploy.sh
@@ -105,6 +122,9 @@ jobs:
             S3_BUCKET=$S3_BUCKET \
             FRONTEND_REPOSITORY=$FRONTEND_REPOSITORY \
             BACKEND_REPOSITORY=$BACKEND_REPOSITORY \
+            POSTGRES_DB=$POSTGRES_DB \
+            POSTGRES_USER=$POSTGRES_USER \
+            POSTGRES_PASSWORD=$POSTGRES_PASSWORD\
             ./deploy.sh
 
               
