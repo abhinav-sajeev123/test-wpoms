@@ -6,8 +6,8 @@ locals {
 }
 
 resource "aws_ecr_repository" "repos" {
-  for_each = toset(local.repositories)
-
-  name = each.value
-  force_delete = true
+  for_each             = toset(local.repositories)
+  name                 = each.value
+  image_tag_mutability = "IMMUTABLE"
+  force_delete         = true
 }
