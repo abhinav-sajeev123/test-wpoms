@@ -6,60 +6,7 @@ WPOMS is a web application with user type Manufacturer, Vendor and Customer for 
 
 Architecture Diagram :-
 
-                    +------------------+
-                    |   Terraform      |
-                    | Infrastructure   |
-                    +------------------+
-                              |
-                              | creates
-                              v
-      +--------------------------------------------------+
-      | AWS Resources                                    |
-      | EC2 • ECR • S3 • IAM                             |
-      +--------------------------------------------------+
-
-
-
-     Developer
-         |
-         | git push
-         v
- +------------------+
- |   GitHub Repo    |
- +------------------+
-         |
-         | triggers CI/CD
-         v
- +----------------------+
- | GitHub Actions       |
- +----------------------+
-       |         |
-       |         |
-       |         +------------------+
-       |                            |
-       v                            v
-+---------------+          +----------------+
-| Amazon ECR    |          | Amazon S3      |
-| Docker Images |          | Docker-compose |
-+---------------+          +----------------+
-         \                     /
-          \                   /
-           \                 /
-            \               /
-                  Pull       
-          +--------------------+
-          |    EC2 Instance    |
-          | (Docker Compose    |
-          |    and ecr images) |
-          +--------------------+
-                    |
-            +-------+-------+
-            |               |
-            v               v
-      +-----------+   +-----------+
-      | Frontend  |   | Backend   |
-      | React     |   | Spring    |
-      +-----------+   +-----------+
+![alt text](image.png)
 
 
 Run Locally:-
@@ -122,3 +69,6 @@ curl -I http://localhost:8081/actuator/health
 
 Live URL :-
 http://15.206.124.215:5173
+
+
+
